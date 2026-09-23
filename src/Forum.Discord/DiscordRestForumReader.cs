@@ -26,6 +26,12 @@ public sealed class DiscordRestForumReader : IForumReader
         return new DiscordRestForumReader(client, botUserId);
     }
 
+    public async Task<(ulong Id, string Username)> GetCurrentUserAsync(CancellationToken ct)
+    {
+        var user = await _client.GetCurrentUserAsync(Options(ct)).ConfigureAwait(false);
+        return (user.Id, user.Username);
+    }
+
     public async Task<IReadOnlyList<PostRef>> ListActivePostsAsync(ulong forumChannelId, CancellationToken ct)
     {
         var options = Options(ct);
