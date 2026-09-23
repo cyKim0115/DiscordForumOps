@@ -18,6 +18,14 @@ public sealed class DiscordRestForumReader : IForumReader
         _botUserId = botUserId;
     }
 
+    public static DiscordRestForumReader Connect(string botToken, ulong botUserId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(botToken);
+        var client = new DiscordRestClient();
+        client.LoginAsync(TokenType.Bot, botToken).GetAwaiter().GetResult();
+        return new DiscordRestForumReader(client, botUserId);
+    }
+
     public async Task<IReadOnlyList<PostRef>> ListActivePostsAsync(ulong forumChannelId, CancellationToken ct)
     {
         var options = Options(ct);

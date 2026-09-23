@@ -18,8 +18,9 @@ public sealed class MentionPollProcessor
         _handler = handler;
     }
 
-    public async Task PollOnceAsync(ulong forumChannelId, CancellationToken ct)
+    public async Task<int> PollOnceAsync(ulong forumChannelId, CancellationToken ct)
     {
+        var newMessageCount = 0;
         var posts = await _reader.ListActivePostsAsync(forumChannelId, ct).ConfigureAwait(false);
         foreach (var post in posts)
         {
@@ -30,6 +31,7 @@ public sealed class MentionPollProcessor
 
             foreach (var message in messages.OrderBy(m => m.Ref.MessageId))
             {
+                newMessageCount++;
                 if (message.MentionsBot)
                 {
                     await _handler.HandleAsync(message, ct).ConfigureAwait(false);
@@ -38,5 +40,7 @@ public sealed class MentionPollProcessor
                 await _cursor.SetLastSeenAsync(post, message.Ref.MessageId, ct).ConfigureAwait(false);
             }
         }
+
+        return newMessageCount;
     }
 }
