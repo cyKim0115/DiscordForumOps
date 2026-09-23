@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Discord.Net.Rest" />
+    <PackageReference Include="Discord.Net.Webhook" />
+    <ProjectReference Include="..\Forum.Core\Forum.Core.csproj" />
+  </ItemGroup>
+</Project>

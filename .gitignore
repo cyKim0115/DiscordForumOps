@@ -1,0 +1,33 @@
+﻿# Build
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+# VS
+.vs/
+*.user
+*.suo
+*.userosscache
+
+# NuGet
+*.nupkg
+**/[Pp]ackages/*
+project.lock.json
+
+# Secrets / local config
+*.env
+**/*.env
+appsettings.*.Local.json
+secrets.json
+**/secrets.json
+
+# OS / coverage
+.DS_Store
+Thumbs.db
+[Tt]est[Rr]esult*/
+*.coverage
+coverage*
