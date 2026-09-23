@@ -129,6 +129,12 @@ dotnet test
 
 ---
 
+## 공개 문서
+
+<!-- GitBook public URL: TBD after site + Git Sync -->
+
+사람용 GitBook 소스는 [`docs/site/`](docs/site/)입니다. 사이트 URL은 Git Sync 이후에 이 자리에 넣습니다.
+
 ## 문서
 
 - [스펙 001 — Forum Hybrid MVP](docs/specs/001-forum-hybrid-mvp.md)
