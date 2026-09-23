@@ -3,7 +3,7 @@ namespace Forum.Core.Tests;
 public class MentionPollProcessorTests
 {
     private const ulong ForumChannelId = 99;
-    private static readonly PostRef Post = new(ForumChannelId, postId: 7);
+    private static readonly PostRef Post = new(ForumChannelId, PostId: 7);
 
     [Fact]
     public async Task Poll_skips_non_mention()

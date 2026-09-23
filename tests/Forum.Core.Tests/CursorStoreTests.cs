@@ -2,7 +2,7 @@ namespace Forum.Core.Tests;
 
 public class CursorStoreTests
 {
-    private static readonly PostRef Post = new(forumChannelId: 10, postId: 20);
+    private static readonly PostRef Post = new(ForumChannelId: 10, PostId: 20);
 
     [Fact]
     public async Task Cursor_advances_only_forward()
