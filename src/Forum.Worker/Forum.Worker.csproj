@@ -3,6 +3,9 @@
     <UserSecretsId>dotnet-Forum.Worker-8af8ff58-e9b3-4679-9a47-8b0a41cc93bf</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Forum.Core.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <ProjectReference Include="..\Forum.Core\Forum.Core.csproj" />
     <ProjectReference Include="..\Forum.Discord\Forum.Discord.csproj" />
