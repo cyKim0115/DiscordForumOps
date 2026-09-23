@@ -1,0 +1,2 @@
+# Human-facing docs only. Agent / protocol prompts stay outside this root.
+root: ./docs/site/
