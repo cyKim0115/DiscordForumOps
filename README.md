@@ -60,10 +60,10 @@ Gateway·WebSocket, MESSAGE_CONTENT 의존 로직, 리액션·핀·아카이브�
 |---|---|---|
 | W1 | 솔루션 스캐폴딩 | ✅ |
 | W2 | Forum.Core 커서·멘션 필터 + 테스트 | ✅ |
-| W3 | Forum.Discord REST 읽기·웹훅 쓰기 어댑터 + WireMock 테스트 | ⬜ |
-| W4 | 시크릿 로더 + 로그 리댁션 | ⬜ |
-| W5 | Forum.Worker 적응형 폴링 루프 | ⬜ |
-| W6 | Forum.Cli 스모크 명령 | ⬜ |
+| W3 | Forum.Discord REST 읽기·웹훅 쓰기 어댑터 + WireMock 테스트 | ✅ |
+| W4 | 시크릿 로더 + 로그 리댁션 | ✅ |
+| W5 | Forum.Worker 적응형 폴링 루프 | ✅ |
+| W6 | Forum.Cli 스모크 명령 | ✅ |
 | W7 | handoff 문서 | ⬜ |
 
 ---
@@ -90,7 +90,7 @@ DiscordForumOps.sln        (net10.0, SDK 10.0.201 — global.json 고정)
 │  ├─ Forum.Core/      도메인·포트 인터페이스. Discord.* 참조 금지
 │  ├─ Forum.Discord/   Discord.Net.Rest/.Webhook을 쓰는 유일한 프로젝트
 │  ├─ Forum.Worker/    BackgroundService 적응형 폴링
-│  └─ Forum.Cli/       단발 스모크 명령 (whoami / smoke-post / smoke-reply / poll-once 예정)
+│  └─ Forum.Cli/       단발 스모크 명령 (whoami / smoke-post / smoke-reply / poll-once)
 ├─ tests/
 │  ├─ Forum.Core.Tests/
 │  └─ Forum.Discord.Tests/   WireMock 계약 테스트
@@ -126,6 +126,25 @@ DiscordForumOps.sln        (net10.0, SDK 10.0.201 — global.json 고정)
 dotnet build   # TreatWarningsAsErrors
 dotnet test
 ```
+
+## Forum.Cli 스모크
+
+`Documents\Sensitive\mcp-secrets.env`의 키 이름만 쓴다. 토큰·웹훅 URL은 출력하지 않는다.
+
+```powershell
+dotnet run --project src/Forum.Cli -- --help
+dotnet run --project src/Forum.Cli -- smoke-post --dry-run
+dotnet run --project src/Forum.Cli -- smoke-reply --dry-run --post-id 0
+```
+
+| 명령 | dry-run | live |
+|---|---|---|
+| `whoami` | 없음. REST identity. `DISCORD_BOT_TOKEN` + `DISCORD_BOT_USER_ID` 필요 | 봇 id·username. 시크릿 값 없음 |
+| `smoke-post` | 전송 없이 채널·제목·본문·persona 배선만 출력. 시크릿 없어도 됨 | `IPersonaPublisher.CreatePostAsync`. 시크릿 + `DISCORD_FORUM_CHANNEL_ID` |
+| `smoke-reply` | 위와 같음. `--post-id`는 live에서 필수 | `ReplyAsync`. 시크릿 + `--post-id` + 포럼 채널 id |
+| `poll-once` | 없음. `MentionPollProcessor` 1틱 후 종료 | `DISCORD_BOT_TOKEN` + `DISCORD_BOT_USER_ID` + `DISCORD_FORUM_CHANNEL_ID` |
+
+live 채널 오버라이드: `--forum-channel-id`. persona: `--persona-name`. 시크릿·채널 id가 없으면 키 이름만 알리고 종료한다.
 
 ---
 
