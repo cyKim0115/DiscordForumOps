@@ -31,14 +31,19 @@ internal static class CliComposition
     {
         var builder = Host.CreateApplicationBuilder(args);
         var wiring = new CliWiring();
+        var secretsLoaded = TryLoadSecrets(out var secrets, out var secretsError);
 
         builder.Services
             .AddOptions<PollingOptions>()
             .Bind(builder.Configuration.GetSection(PollingOptions.SectionName))
             .PostConfigure(options =>
             {
-                if (options.ForumChannelId == 0
-                    && ulong.TryParse(builder.Configuration[PollingOptions.ForumChannelIdKey], out var channelId))
+                if (options.ForumChannelId != 0)
+                {
+                    return;
+                }
+
+                if (TryResolveForumChannelId(builder.Configuration, secretsLoaded ? secrets : null, out var channelId))
                 {
                     options.ForumChannelId = channelId;
                 }
@@ -57,7 +62,7 @@ internal static class CliComposition
             return new FileCursorStore(Path.Combine(directory, "cursor.json"));
         });
 
-        if (TryLoadSecrets(out var secrets, out var secretsError))
+        if (secretsLoaded)
         {
             builder.Services.AddSingleton(secrets);
             builder.Services.AddSingleton<IPersonaPublisher>(_ => new DiscordWebhookPublisher(secrets.ForumWebhookUrl));
@@ -67,7 +72,7 @@ internal static class CliComposition
                 SecretsError = null,
             };
 
-            if (TryReadBotUserId(builder.Configuration, out var botUserId))
+            if (TryReadBotUserId(builder.Configuration, secrets, out var botUserId))
             {
                 var token = secrets.BotToken;
                 builder.Services.AddSingleton(_ => DiscordRestForumReader.Connect(token, botUserId));
@@ -93,7 +98,36 @@ internal static class CliComposition
 
     public static bool TryReadBotUserId(IConfiguration configuration, out ulong botUserId)
     {
-        return ulong.TryParse(configuration[PollingOptions.BotUserIdKey], out botUserId) && botUserId != 0;
+        return TryReadBotUserId(configuration, secrets: null, out botUserId);
+    }
+
+    public static bool TryReadBotUserId(IConfiguration configuration, ForumSecrets? secrets, out ulong botUserId)
+    {
+        if (SecretsLoader.TryResolveUInt64(
+                configuration[PollingOptions.BotUserIdKey],
+                secrets?.BotUserId,
+                out botUserId))
+        {
+            return true;
+        }
+
+        return SecretsLoader.TryReadOptionalId(PollingOptions.BotUserIdKey, out botUserId);
+    }
+
+    public static bool TryResolveForumChannelId(
+        IConfiguration configuration,
+        ForumSecrets? secrets,
+        out ulong forumChannelId)
+    {
+        if (SecretsLoader.TryResolveUInt64(
+                configuration[PollingOptions.ForumChannelIdKey],
+                secrets?.ForumChannelId,
+                out forumChannelId))
+        {
+            return true;
+        }
+
+        return SecretsLoader.TryReadOptionalId(PollingOptions.ForumChannelIdKey, out forumChannelId);
     }
 
     public static bool TryLoadSecrets(out ForumSecrets secrets, out string? error)
@@ -120,16 +154,26 @@ internal static class CliComposition
         }
     }
 
-    public static Persona ResolvePersona(IServiceProvider services, string? personaNameOverride)
+    public static Persona ResolvePersona(
+        IServiceProvider services,
+        string? personaNameOverride,
+        string? avatarUrlOverride = null)
     {
         var options = services.GetRequiredService<IOptions<PersonaOptions>>().Value;
+        var configuration = services.GetRequiredService<IConfiguration>();
         var name = string.IsNullOrWhiteSpace(personaNameOverride) ? options.Name : personaNameOverride.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
             name = "ForumOpsSmoke";
         }
 
-        return new Persona(name, options.AvatarUrl);
+        var avatarUrl = PersonaAvatarResolver.Resolve(
+            name,
+            avatarUrlOverride,
+            options.AvatarUrl,
+            configuration[PersonaAvatarResolver.MapPathKey],
+            static message => Console.Error.WriteLine(message));
+        return new Persona(name, avatarUrl);
     }
 
     public static ulong ResolveForumChannelId(IServiceProvider services, ulong? overrideId)

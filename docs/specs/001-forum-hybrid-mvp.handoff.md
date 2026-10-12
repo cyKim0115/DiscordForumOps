@@ -1,8 +1,8 @@
 # 001 handoff — Forum Hybrid MVP
 
-- **기준:** `origin/main` `8ce42ef` (W6 CLI 머지, PR #6)
-- **작성:** Weld W7 · 2026-09-23 KST
-- **범위:** 문서만. 제품 코드 변경 없음.
+- **기준:** `cursor/persona-avatar-map` (origin/main `8f5581f` + 페르소나 아바타 맵 / 시크릿 ID 폴백)
+- **작성:** 2026-10-12
+- **범위:** 웹훅 persona 아바타 리졸버, CLI `--avatar-url` / `--persona-name`, `DISCORD_BOT_USER_ID`·`DISCORD_FORUM_CHANNEL_ID` 시크릿 폴백, 테스트, 본 문서.
 
 ---
 
@@ -21,11 +21,11 @@
 
 ## Tests
 
-`dotnet test DiscordForumOps.sln` — **20 passed / 0 failed**, 경고 0.
+`dotnet test DiscordForumOps.sln` — **28 passed / 0 failed**, 경고 0.
 
 | 프로젝트 | 통과 | 실패 |
 |---|---|---|
-| Forum.Core.Tests | 14 | 0 |
+| Forum.Core.Tests | 22 | 0 |
 | Forum.Discord.Tests | 6 | 0 |
 
 §5 필수 이름 전부 green:
@@ -40,6 +40,11 @@
 - `RateLimit_429_retries_once`
 - `Secrets_never_logged`
 
+추가:
+
+- 아바타 리졸버 우선순위(임시 JSON 픽스처, fake URL) / 파일·항목 부재 시 경고(URL 미출력)
+- 시크릿 파일에서 `DISCORD_BOT_USER_ID`·`DISCORD_FORUM_CHANNEL_ID` 폴백, env/config가 우선
+
 Weld 추가분(적응형 간격·Worker 틱)도 green.
 
 ---
@@ -50,13 +55,28 @@ Weld 추가분(적응형 간격·Worker 틱)도 green.
 
 | 항목 | 결과 |
 |---|---|
-| dry-run | **pass** (exit 0). publisher 미호출. `secretsConfigured=false`, `readerConfigured=false`, `forumChannelId=unset` |
-| live smoke-post | **skipped** |
-| R2 (`wait=true` 응답 `id` == `channel_id`) | **skipped** — 일치 여부 미검증 |
+| dry-run | **pass** (exit 0). publisher 미호출 |
+| dry-run `--persona-name Weld` + 임시 아바타 맵 | **pass**. `persona=Weld`, `avatarConfigured=true`. URL 미출력 |
+| live smoke-post (이 세션) | **하지 않음** |
+| R2 (`wait=true` 응답 `id` == `channel_id`) | **pass** — 2026-10-12. post id `1559080898476122125`, starter message id == post id, author persona Weld |
 
-`Documents\Sensitive\mcp-secrets.env` 파일은 있음. 스펙 키 `DISCORD_BOT_TOKEN` / `DISCORD_FORUM_WEBHOOK_URL` 은 없음. 다른 Discord 웹훅 키는 있으나 포럼 웹훅이 아니므로 대체 사용하지 않음. 값·URL 기록 없음.
+값·웹훅 URL은 기록하지 않음.
 
-CLI live `CreatePostAsync`는 메시지 id만 반환. 시크릿이 생겨도 R2 비교는 `?wait=true` JSON의 `id` vs `channel_id`가 필요.
+---
+
+## 새 옵션·설정
+
+웹훅 쓰기(새 포스트·스레드 답글)는 같은 persona 이름/아바타를 쓴다.
+
+| 항목 | 설명 |
+|---|---|
+| `--persona-name` | `smoke-post` / `smoke-reply` 웹훅 username 오버라이드 |
+| `--avatar-url` | `smoke-post` / `smoke-reply` 웹훅 avatar 오버라이드 |
+| `DISCORD_AVATAR_MAP_PATH` | 아바타 맵 JSON 경로. 기본 `%USERPROFILE%\Documents\Sensitive\avatar-cdn-map.json` |
+| 맵 형식 | `[{"name":"Reed","agent_id":"...","cdn_url":"https://..."}]` 이름 대소문자 무시 |
+| 아바타 우선순위 | `--avatar-url` > 맵의 `--persona-name` 항목 > 설정 `Persona:AvatarUrl` > 없음 |
+| 맵 부재 | 크래시 없음. 경고만. URL은 출력하지 않음 |
+| `DISCORD_BOT_USER_ID` / `DISCORD_FORUM_CHANNEL_ID` | env/config가 있으면 그걸 쓰고, 없으면 `Documents\Sensitive\mcp-secrets.env` (`SecretsLoader`) |
 
 ---
 
@@ -65,11 +85,11 @@ CLI live `CreatePostAsync`는 메시지 id만 반환. 시크릿이 생겨도 R2 
 설계 항목은 스펙 본문에 이미 [x].
 
 - [x] `dotnet build` TreatWarningsAsErrors 성공 (경고 0 / 오류 0)
-- [x] §5 테스트 전부 green (Core 14 + Discord 6)
-- [x] 스모크 dry-run 성공. live / R2는 스펙 시크릿 키 부재로 skipped
+- [x] §5 테스트 전부 green (Core 22 + Discord 6)
+- [x] 스모크 dry-run 성공. R2 live smoke는 2026-10-12 통과
 - [x] 이 handoff에 빌드·테스트·스모크·후속 요약
 
-W1–W6 (`main@8ce42ef`):
+W1–W6 (`main@8ce42ef`) + W7 handoff (`main@8f5581f`) + 본 변경:
 
 - [x] W1 솔루션 스캐폴딩 + Directory.* + docs
 - [x] W2 Forum.Core + Core.Tests
@@ -78,6 +98,7 @@ W1–W6 (`main@8ce42ef`):
 - [x] W5 Forum.Worker 적응형 폴링
 - [x] W6 Forum.Cli whoami / smoke-post / smoke-reply / poll-once
 - [x] W7 본 문서
+- [x] 페르소나 아바타 맵 리졸버 + 시크릿 ID 폴백
 
 ---
 
@@ -91,7 +112,7 @@ W1–W6 (`main@8ce42ef`):
 
 | ID | 상태 |
 |---|---|
-| R2 | **skipped / 미검증.** 스펙 웹훅·봇 토큰 키 없음. live `id` vs `channel_id` 비교 못 함 |
+| R2 | **pass** (2026-10-12). post id `1559080898476122125`, starter message id == post id, author persona Weld |
 | R4 | 미결. 상시 가동·스케줄러는 002 |
 | R5 | 미결. knowledge-rag MCP (Lore/Reed) |
 | R6 | 미결. 웹훅 로테이션 1줄 (Reed) |

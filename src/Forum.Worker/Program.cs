@@ -10,8 +10,21 @@ builder.Services
     .Bind(builder.Configuration.GetSection(PollingOptions.SectionName))
     .PostConfigure(options =>
     {
-        if (options.ForumChannelId == 0
-            && ulong.TryParse(builder.Configuration[PollingOptions.ForumChannelIdKey], out var channelId))
+        if (options.ForumChannelId != 0)
+        {
+            return;
+        }
+
+        ulong? secretsChannelId = null;
+        if (SecretsLoader.TryReadOptionalId(PollingOptions.ForumChannelIdKey, out var fromSecrets))
+        {
+            secretsChannelId = fromSecrets;
+        }
+
+        if (SecretsLoader.TryResolveUInt64(
+                builder.Configuration[PollingOptions.ForumChannelIdKey],
+                secretsChannelId,
+                out var channelId))
         {
             options.ForumChannelId = channelId;
         }
@@ -56,17 +69,20 @@ static bool TryLoadDiscordReader(
     secrets = null!;
     readerFactory = null!;
 
-    if (!ulong.TryParse(configuration[PollingOptions.BotUserIdKey], out var botUserId) || botUserId == 0)
-    {
-        return false;
-    }
-
     if (!File.Exists(SecretsLoader.DefaultPath))
     {
         return false;
     }
 
     secrets = SecretsLoader.Load();
+    if (!SecretsLoader.TryResolveUInt64(
+            configuration[PollingOptions.BotUserIdKey],
+            secrets.BotUserId,
+            out var botUserId))
+    {
+        return false;
+    }
+
     var token = secrets.BotToken;
     readerFactory = () => DiscordRestForumReader.Connect(token, botUserId);
     return true;

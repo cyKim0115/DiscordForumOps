@@ -11,6 +11,7 @@ var dryRunOption = new Option<bool>("--dry-run", "Validate wiring without sendin
 var threadNameOption = new Option<string>("--thread-name", () => "cli-smoke", "Forum post title");
 var contentOption = new Option<string>("--content", () => "Forum.Cli smoke", "Message content");
 var personaNameOption = new Option<string?>("--persona-name", "Webhook persona username override");
+var avatarUrlOption = new Option<string?>("--avatar-url", "Webhook persona avatar URL override");
 var postIdOption = new Option<ulong?>("--post-id", "Existing forum post id");
 var forumChannelIdOption = new Option<ulong?>("--forum-channel-id", "Forum channel id override");
 
@@ -25,6 +26,7 @@ smokePost.AddOption(dryRunOption);
 smokePost.AddOption(threadNameOption);
 smokePost.AddOption(contentOption);
 smokePost.AddOption(personaNameOption);
+smokePost.AddOption(avatarUrlOption);
 smokePost.AddOption(forumChannelIdOption);
 smokePost.SetHandler(async (InvocationContext context) =>
 {
@@ -32,10 +34,11 @@ smokePost.SetHandler(async (InvocationContext context) =>
     var threadName = context.ParseResult.GetValueForOption(threadNameOption) ?? "cli-smoke";
     var content = context.ParseResult.GetValueForOption(contentOption) ?? "Forum.Cli smoke";
     var personaName = context.ParseResult.GetValueForOption(personaNameOption);
+    var avatarUrl = context.ParseResult.GetValueForOption(avatarUrlOption);
     var forumChannelId = context.ParseResult.GetValueForOption(forumChannelIdOption);
     context.ExitCode = await RunAsync(
         context,
-        (host, ct) => SmokePostAsync(host, dryRun, threadName, content, personaName, forumChannelId, ct));
+        (host, ct) => SmokePostAsync(host, dryRun, threadName, content, personaName, avatarUrl, forumChannelId, ct));
 });
 
 var smokeReply = new Command("smoke-reply", "Reply into an existing forum post via IPersonaPublisher");
@@ -43,6 +46,7 @@ smokeReply.AddOption(dryRunOption);
 smokeReply.AddOption(postIdOption);
 smokeReply.AddOption(contentOption);
 smokeReply.AddOption(personaNameOption);
+smokeReply.AddOption(avatarUrlOption);
 smokeReply.AddOption(forumChannelIdOption);
 smokeReply.SetHandler(async (InvocationContext context) =>
 {
@@ -50,10 +54,11 @@ smokeReply.SetHandler(async (InvocationContext context) =>
     var postId = context.ParseResult.GetValueForOption(postIdOption);
     var content = context.ParseResult.GetValueForOption(contentOption) ?? "Forum.Cli smoke";
     var personaName = context.ParseResult.GetValueForOption(personaNameOption);
+    var avatarUrl = context.ParseResult.GetValueForOption(avatarUrlOption);
     var forumChannelId = context.ParseResult.GetValueForOption(forumChannelIdOption);
     context.ExitCode = await RunAsync(
         context,
-        (host, ct) => SmokeReplyAsync(host, dryRun, postId, content, personaName, forumChannelId, ct));
+        (host, ct) => SmokeReplyAsync(host, dryRun, postId, content, personaName, avatarUrl, forumChannelId, ct));
 });
 
 var pollOnce = new Command("poll-once", "Run one MentionPollProcessor tick and exit");
@@ -97,7 +102,10 @@ static async Task<int> WhoAmIAsync(IHost host, CancellationToken ct)
 
     var reader = host.Services.GetRequiredService<DiscordRestForumReader>();
     var (id, username) = await reader.GetCurrentUserAsync(ct).ConfigureAwait(false);
-    CliComposition.TryReadBotUserId(host.Services.GetRequiredService<IConfiguration>(), out var configuredId);
+    CliComposition.TryReadBotUserId(
+        host.Services.GetRequiredService<IConfiguration>(),
+        host.Services.GetService<ForumSecrets>(),
+        out var configuredId);
 
     Console.WriteLine($"id={id}");
     Console.WriteLine($"username={username}");
@@ -111,10 +119,11 @@ static async Task<int> SmokePostAsync(
     string threadName,
     string content,
     string? personaName,
+    string? avatarUrl,
     ulong? forumChannelIdOverride,
     CancellationToken ct)
 {
-    var persona = CliComposition.ResolvePersona(host.Services, personaName);
+    var persona = CliComposition.ResolvePersona(host.Services, personaName, avatarUrl);
     var forumChannelId = CliComposition.ResolveForumChannelId(host.Services, forumChannelIdOverride);
     var wiring = host.Services.GetRequiredService<CliWiring>();
 
@@ -139,7 +148,7 @@ static async Task<int> SmokePostAsync(
 
     if (forumChannelId == 0)
     {
-        Console.Error.WriteLine($"Missing {PollingOptions.ForumChannelIdKey} (env, appsettings, or --forum-channel-id).");
+        Console.Error.WriteLine($"Missing {PollingOptions.ForumChannelIdKey} (env, appsettings, secrets, or --forum-channel-id).");
         return 1;
     }
 
@@ -157,10 +166,11 @@ static async Task<int> SmokeReplyAsync(
     ulong? postId,
     string content,
     string? personaName,
+    string? avatarUrl,
     ulong? forumChannelIdOverride,
     CancellationToken ct)
 {
-    var persona = CliComposition.ResolvePersona(host.Services, personaName);
+    var persona = CliComposition.ResolvePersona(host.Services, personaName, avatarUrl);
     var forumChannelId = CliComposition.ResolveForumChannelId(host.Services, forumChannelIdOverride);
     var wiring = host.Services.GetRequiredService<CliWiring>();
 
@@ -191,7 +201,7 @@ static async Task<int> SmokeReplyAsync(
 
     if (forumChannelId == 0)
     {
-        Console.Error.WriteLine($"Missing {PollingOptions.ForumChannelIdKey} (env, appsettings, or --forum-channel-id).");
+        Console.Error.WriteLine($"Missing {PollingOptions.ForumChannelIdKey} (env, appsettings, secrets, or --forum-channel-id).");
         return 1;
     }
 
@@ -214,7 +224,7 @@ static async Task<int> PollOnceAsync(IHost host, ulong? forumChannelIdOverride, 
     var forumChannelId = CliComposition.ResolveForumChannelId(host.Services, forumChannelIdOverride);
     if (forumChannelId == 0)
     {
-        Console.Error.WriteLine($"Missing {PollingOptions.ForumChannelIdKey} (env, appsettings, or --forum-channel-id).");
+        Console.Error.WriteLine($"Missing {PollingOptions.ForumChannelIdKey} (env, appsettings, secrets, or --forum-channel-id).");
         return 1;
     }
 

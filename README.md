@@ -112,8 +112,9 @@ DiscordForumOps.sln        (net10.0, SDK 10.0.201 — global.json 고정)
 |---|---|---|
 | `DISCORD_BOT_TOKEN` | mcp-secrets.env | REST 로그인 |
 | `DISCORD_FORUM_WEBHOOK_URL` | mcp-secrets.env | 쓰기 |
-| `DISCORD_FORUM_CHANNEL_ID` | appsettings.json 가능 | 대상 포럼 채널 |
-| `DISCORD_BOT_USER_ID` | appsettings.json | 멘션 판정 |
+| `DISCORD_FORUM_CHANNEL_ID` | env/appsettings, 없으면 mcp-secrets.env | 대상 포럼 채널 |
+| `DISCORD_BOT_USER_ID` | env/appsettings, 없으면 mcp-secrets.env | 멘션 판정 |
+| `DISCORD_AVATAR_MAP_PATH` | env/appsettings (기본: Documents\Sensitive\avatar-cdn-map.json) | 페르소나 아바타 맵 |
 
 - 로그 리댁션: 웹훅 경로는 `/api/webhooks/***/***`, 봇 토큰은 `Bot ***`로 가린다.
 - `.gitignore`가 `*.env`, `appsettings.*.Local.json`, `secrets.json`을 제외한다.
@@ -144,7 +145,7 @@ dotnet run --project src/Forum.Cli -- smoke-reply --dry-run --post-id 0
 | `smoke-reply` | 위와 같음. `--post-id`는 live에서 필수 | `ReplyAsync`. 시크릿 + `--post-id` + 포럼 채널 id |
 | `poll-once` | 없음. `MentionPollProcessor` 1틱 후 종료 | `DISCORD_BOT_TOKEN` + `DISCORD_BOT_USER_ID` + `DISCORD_FORUM_CHANNEL_ID` |
 
-live 채널 오버라이드: `--forum-channel-id`. persona: `--persona-name`. 시크릿·채널 id가 없으면 키 이름만 알리고 종료한다.
+live 채널 오버라이드: `--forum-channel-id`. persona: `--persona-name`(smoke-post / smoke-reply). 아바타: `--avatar-url`이 있으면 그걸 쓰고, 없으면 맵의 `--persona-name` 항목, 그다음 설정 `Persona:AvatarUrl`. 시크릿·채널 id가 없으면 키 이름만 알리고 종료한다. 맵 파일/항목이 없어도 중단하지 않고 경고만 남긴다(URL은 출력하지 않음).
 
 ---
 
