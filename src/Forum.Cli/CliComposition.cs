@@ -62,10 +62,11 @@ internal static class CliComposition
             return new FileCursorStore(Path.Combine(directory, "cursor.json"));
         });
 
+        builder.Services.AddSingleton<DiscordWebhookPublisherCache>();
+
         if (secretsLoaded)
         {
             builder.Services.AddSingleton(secrets);
-            builder.Services.AddSingleton<IPersonaPublisher>(_ => new DiscordWebhookPublisher(secrets.ForumWebhookUrl));
             wiring = new CliWiring
             {
                 PublisherAvailable = true,
@@ -159,6 +160,14 @@ internal static class CliComposition
         string? personaNameOverride,
         string? avatarUrlOverride = null)
     {
+        return ResolvePublishTarget(services, personaNameOverride, avatarUrlOverride).Persona;
+    }
+
+    public static PublishTarget ResolvePublishTarget(
+        IServiceProvider services,
+        string? personaNameOverride,
+        string? avatarUrlOverride = null)
+    {
         var options = services.GetRequiredService<IOptions<PersonaOptions>>().Value;
         var configuration = services.GetRequiredService<IConfiguration>();
         var name = string.IsNullOrWhiteSpace(personaNameOverride) ? options.Name : personaNameOverride.Trim();
@@ -167,13 +176,40 @@ internal static class CliComposition
             name = "ForumOpsSmoke";
         }
 
+        var mapPath = configuration[PersonaMap.MapPathKey];
         var avatarUrl = PersonaAvatarResolver.Resolve(
             name,
             avatarUrlOverride,
             options.AvatarUrl,
-            configuration[PersonaAvatarResolver.MapPathKey],
+            mapPath,
             static message => Console.Error.WriteLine(message));
-        return new Persona(name, avatarUrl);
+        var personaWebhookUrl = PersonaWebhookResolver.ResolveUrl(name, mapPath);
+        var webhookSource = string.IsNullOrWhiteSpace(personaWebhookUrl)
+            ? PersonaWebhookResolver.SharedSource
+            : PersonaWebhookResolver.PersonaSource;
+        return new PublishTarget(new Persona(name, avatarUrl), webhookSource, personaWebhookUrl);
+    }
+
+    public static IPersonaPublisher ResolvePublisher(IServiceProvider services, PublishTarget target)
+    {
+        var url = ResolveWebhookUrl(services, target);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            throw new InvalidOperationException(
+                $"Live Discord requires secrets key {SecretsLoader.ForumWebhookUrlKey} or a persona map forum_webhook_url.");
+        }
+
+        return services.GetRequiredService<DiscordWebhookPublisherCache>().GetOrCreate(url);
+    }
+
+    public static string? ResolveWebhookUrl(IServiceProvider services, PublishTarget target)
+    {
+        if (!string.IsNullOrWhiteSpace(target.PersonaWebhookUrl))
+        {
+            return target.PersonaWebhookUrl;
+        }
+
+        return services.GetService<ForumSecrets>()?.ForumWebhookUrl;
     }
 
     public static ulong ResolveForumChannelId(IServiceProvider services, ulong? overrideId)
@@ -186,6 +222,8 @@ internal static class CliComposition
         return services.GetRequiredService<IOptions<PollingOptions>>().Value.ForumChannelId;
     }
 }
+
+internal sealed record PublishTarget(Persona Persona, string WebhookSource, string? PersonaWebhookUrl);
 
 internal sealed class ConsoleMentionHandler : IMentionHandler
 {

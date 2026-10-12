@@ -123,7 +123,7 @@ static async Task<int> SmokePostAsync(
     ulong? forumChannelIdOverride,
     CancellationToken ct)
 {
-    var persona = CliComposition.ResolvePersona(host.Services, personaName, avatarUrl);
+    var target = CliComposition.ResolvePublishTarget(host.Services, personaName, avatarUrl);
     var forumChannelId = CliComposition.ResolveForumChannelId(host.Services, forumChannelIdOverride);
     var wiring = host.Services.GetRequiredService<CliWiring>();
 
@@ -135,15 +135,9 @@ static async Task<int> SmokePostAsync(
             threadName: threadName,
             postId: null,
             content: content,
-            persona: persona,
+            target: target,
             wiring: wiring);
         return 0;
-    }
-
-    if (!wiring.PublisherAvailable)
-    {
-        WriteLiveUnavailable(wiring, needsBotUserId: false);
-        return 1;
     }
 
     if (forumChannelId == 0)
@@ -152,9 +146,13 @@ static async Task<int> SmokePostAsync(
         return 1;
     }
 
-    var publisher = host.Services.GetRequiredService<IPersonaPublisher>();
+    if (!TryResolveLivePublisher(host.Services, wiring, target, out var publisher))
+    {
+        return 1;
+    }
+
     var id = await publisher
-        .CreatePostAsync(forumChannelId, threadName, content, persona, appliedTagIds: null, ct)
+        .CreatePostAsync(forumChannelId, threadName, content, target.Persona, appliedTagIds: null, ct)
         .ConfigureAwait(false);
     Console.WriteLine($"created post id={id}");
     return 0;
@@ -170,7 +168,7 @@ static async Task<int> SmokeReplyAsync(
     ulong? forumChannelIdOverride,
     CancellationToken ct)
 {
-    var persona = CliComposition.ResolvePersona(host.Services, personaName, avatarUrl);
+    var target = CliComposition.ResolvePublishTarget(host.Services, personaName, avatarUrl);
     var forumChannelId = CliComposition.ResolveForumChannelId(host.Services, forumChannelIdOverride);
     var wiring = host.Services.GetRequiredService<CliWiring>();
 
@@ -182,15 +180,9 @@ static async Task<int> SmokeReplyAsync(
             threadName: null,
             postId: postId,
             content: content,
-            persona: persona,
+            target: target,
             wiring: wiring);
         return 0;
-    }
-
-    if (!wiring.PublisherAvailable)
-    {
-        WriteLiveUnavailable(wiring, needsBotUserId: false);
-        return 1;
     }
 
     if (postId is null or 0)
@@ -205,9 +197,13 @@ static async Task<int> SmokeReplyAsync(
         return 1;
     }
 
-    var publisher = host.Services.GetRequiredService<IPersonaPublisher>();
+    if (!TryResolveLivePublisher(host.Services, wiring, target, out var publisher))
+    {
+        return 1;
+    }
+
     var post = new PostRef(forumChannelId, postId.Value);
-    await publisher.ReplyAsync(post, content, persona, ct).ConfigureAwait(false);
+    await publisher.ReplyAsync(post, content, target.Persona, ct).ConfigureAwait(false);
     Console.WriteLine($"replied post={post.PostId}");
     return 0;
 }
@@ -234,13 +230,30 @@ static async Task<int> PollOnceAsync(IHost host, ulong? forumChannelIdOverride, 
     return 0;
 }
 
+static bool TryResolveLivePublisher(
+    IServiceProvider services,
+    CliWiring wiring,
+    PublishTarget target,
+    out IPersonaPublisher publisher)
+{
+    publisher = null!;
+    if (string.IsNullOrWhiteSpace(CliComposition.ResolveWebhookUrl(services, target)))
+    {
+        WriteLiveUnavailable(wiring, needsBotUserId: false);
+        return false;
+    }
+
+    publisher = CliComposition.ResolvePublisher(services, target);
+    return true;
+}
+
 static void WriteDryRun(
     string command,
     ulong forumChannelId,
     string? threadName,
     ulong? postId,
     string content,
-    Persona persona,
+    PublishTarget target,
     CliWiring wiring)
 {
     Console.WriteLine($"dry-run: {command}");
@@ -260,8 +273,9 @@ static void WriteDryRun(
     }
 
     Console.WriteLine($"content={LogScrubber.Redact(content)}");
-    Console.WriteLine($"persona={persona.Name}");
-    Console.WriteLine($"avatarConfigured={(!string.IsNullOrWhiteSpace(persona.AvatarUrl)).ToString().ToLowerInvariant()}");
+    Console.WriteLine($"persona={target.Persona.Name}");
+    Console.WriteLine($"avatarConfigured={(!string.IsNullOrWhiteSpace(target.Persona.AvatarUrl)).ToString().ToLowerInvariant()}");
+    Console.WriteLine($"webhook={target.WebhookSource}");
     Console.WriteLine($"secretsConfigured={wiring.PublisherAvailable.ToString().ToLowerInvariant()}");
     Console.WriteLine($"readerConfigured={wiring.ReaderAvailable.ToString().ToLowerInvariant()}");
     Console.WriteLine("publisher: not invoked");
@@ -276,7 +290,7 @@ static void WriteLiveUnavailable(CliWiring wiring, bool needsBotUserId)
     else if (!wiring.PublisherAvailable)
     {
         Console.Error.WriteLine(
-            $"Live Discord requires secrets keys {SecretsLoader.BotTokenKey} and {SecretsLoader.ForumWebhookUrlKey}.");
+            $"Live Discord requires secrets key {SecretsLoader.ForumWebhookUrlKey} or a persona map forum_webhook_url.");
     }
 
     if (needsBotUserId && !wiring.ReaderAvailable)
